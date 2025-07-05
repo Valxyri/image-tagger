@@ -22,6 +22,9 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        #file-upload-label {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -34,12 +37,19 @@
 
         <!-- Step 1: Image Selection -->
         <div id="selection-step" class="bg-white p-6 rounded-xl shadow-md mb-8">
-            <h2 class="text-2xl font-semibold mb-4">Step 1: Select Image Folder</h2>
-            <p class="mb-4 text-gray-600">In a real application, you would connect to Google Drive here. For this demo, we'll use a pre-selected folder of sample PMG images.</p>
+            <h2 class="text-2xl font-semibold mb-4">Step 1: Upload Your Images</h2>
+            <p class="mb-4 text-gray-600">Click the button below to select one or more image files from your computer.</p>
+            
+            <input type="file" id="image-upload" multiple accept="image/jpeg, image/png, image/webp" class="hidden">
+            <label for="image-upload" id="file-upload-label" class="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center text-lg mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Select Images...
+            </label>
+
             <div id="image-previews" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 mb-4">
                 <!-- Image previews will be populated by JavaScript -->
             </div>
-            <button id="analyze-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center text-lg">
+            <button id="analyze-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center text-lg disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/><path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M12 12v1.5"/><path d="M12 21v-1.5"/><path d="M21.31 12h-1.5"/><path d="M4.19 12H2.7"/><path d="m18.36 5.64-.9.9"/><path d="m6.54 17.46-.9.9"/></svg>
                 Analyze Images
             </button>
@@ -78,7 +88,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // --- DATA AND CONFIGURATION ---
-
+            const imageUpload = document.getElementById('image-upload');
             const analyzeBtn = document.getElementById('analyze-btn');
             const startOverBtn = document.getElementById('start-over-btn');
             const exportCsvBtn = document.getElementById('export-csv-btn');
@@ -87,16 +97,7 @@
             const resultsTableBody = document.getElementById('results-table-body');
             const imagePreviewsContainer = document.getElementById('image-previews');
 
-            const sampleImages = [
-                { id: 'img1', filename: 'PMG_Courtyard_001.jpg', url: 'https://i.imgur.com/gA3d5S9.jpg' },
-                { id: 'img2', filename: 'PMG_WallDetail_002.jpg', url: 'https://i.imgur.com/uV8a2PE.jpg' },
-                { id: 'img3', filename: 'PMG_FolkArt_003.jpg', url: 'https://i.imgur.com/V3vA4sR.jpg' },
-                { id: 'img4', filename: 'PMG_Grotto_004.jpg', url: 'https://i.imgur.com/jYyKz8p.jpg' },
-                { id: 'img5', filename: 'PMG_BicycleWheel_005.jpg', url: 'https://i.imgur.com/qL5gL6b.jpg' },
-                { id: 'img6', filename: 'PMG_MirrorText_006.jpg', url: 'https://i.imgur.com/c2b0tYv.jpg' },
-                { id: 'img7', filename: 'PMG_Passageway_007.jpg', url: 'https://i.imgur.com/8xJ9T0f.jpg' },
-                { id: 'img8', filename: 'PMG_Sculpture_008.jpg', url: 'https://i.imgur.com/W2oZ8vR.jpg' },
-            ];
+            let userFiles = [];
 
             const vocabulary = {
                 "Artist & Method": ["Isaiah Zagar", "The Zagar Method", "Mosaic", "Trencadís", "Pique Assiette", "Assemblage", "Grouting", "Feathering", "Blobs", "Line Drawing", "Reverse Painted Glass", "Faux Stained Glass", "Site-specific installation", "Art Environment", "Immersive art", "Total Embellishment", "Sculptural Walls", "Julia Zagar", "Jeremiah Zagar", "Ezekiel Zagar"],
@@ -109,16 +110,12 @@
 
             // --- CORE FUNCTIONS ---
 
-            async function imageUrlToBase64(url) {
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-                const response = await fetch(proxyUrl);
-                if (!response.ok) throw new Error(`Failed to fetch image via proxy: ${response.statusText}`);
-                const blob = await response.blob();
+            async function fileToBase64(file) {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
+                    reader.readAsDataURL(file);
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = error => reject(error);
                 });
             }
 
@@ -174,37 +171,46 @@
 
             // --- UI AND EVENT HANDLING ---
 
-            function populatePreviews() {
+            imageUpload.addEventListener('change', function(event) {
+                userFiles = Array.from(event.target.files);
                 imagePreviewsContainer.innerHTML = '';
-                sampleImages.forEach(img => {
-                    const imgElement = document.createElement('img');
-                    imgElement.src = img.url;
-                    imgElement.alt = "PMG Sample Image";
-                    imgElement.className = "w-full h-full object-cover rounded-lg shadow-sm";
-                    imagePreviewsContainer.appendChild(imgElement);
-                });
-            }
+                if (userFiles.length > 0) {
+                    userFiles.forEach(file => {
+                        const imgElement = document.createElement('img');
+                        imgElement.src = URL.createObjectURL(file);
+                        imgElement.alt = "User upload preview";
+                        imgElement.className = "w-full h-full object-cover rounded-lg shadow-sm";
+                        imgElement.onload = () => URL.revokeObjectURL(imgElement.src); // Free memory
+                        imagePreviewsContainer.appendChild(imgElement);
+                    });
+                    analyzeBtn.disabled = false;
+                } else {
+                    analyzeBtn.disabled = true;
+                }
+            });
             
             analyzeBtn.addEventListener('click', async function() {
+                if (userFiles.length === 0) return;
+
                 selectionStep.classList.add('hidden');
                 resultsStep.classList.remove('hidden');
 
-                for (const image of sampleImages) {
+                for (const file of userFiles) {
                     const row = resultsTableBody.insertRow();
-                    row.dataset.filename = image.filename;
+                    row.dataset.filename = file.name;
                     row.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${image.filename}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${file.name}</td>
                         <td class="px-6 py-4 align-top"><div class="flex items-center"><div class="loader mr-2"></div><span>Analyzing...</span></div></td>
                         <td class="px-6 py-4 align-top"><div class="flex items-center"><div class="loader mr-2"></div><span>Generating...</span></div></td>
                     `;
 
                     try {
-                        const base64 = await imageUrlToBase64(image.url);
+                        const base64 = await fileToBase64(file);
                         const description = await getAIDescription(base64);
                         const keywords = extractKeywords(description);
                         
                         row.dataset.description = description;
-                        row.dataset.keywords = keywords.join(', ');
+                        row.dataset.keywords = keywords.join('; '); // Use semicolon for multi-keyword fields
 
                         row.cells[1].innerHTML = `<div class="text-sm text-gray-900">${description}</div>`;
                         
@@ -220,7 +226,7 @@
                         row.cells[2].innerHTML = keywordsHtml;
 
                     } catch (error) {
-                        console.error(`Failed to process image ${image.id}:`, error);
+                        console.error(`Failed to process image ${file.name}:`, error);
                         row.cells[1].innerHTML = `<div class="text-sm text-red-600">Failed to analyze image. ${error.message}</div>`;
                         row.cells[2].innerHTML = `<div class="text-sm text-red-600">Error</div>`;
                     }
@@ -231,11 +237,13 @@
                 resultsStep.classList.add('hidden');
                 selectionStep.classList.remove('hidden');
                 resultsTableBody.innerHTML = '';
+                imagePreviewsContainer.innerHTML = '';
+                userFiles = [];
+                imageUpload.value = ''; // Reset file input
+                analyzeBtn.disabled = true;
             });
             
             exportCsvBtn.addEventListener('click', exportToCsv);
-
-            populatePreviews();
         });
     </script>
 </body>
