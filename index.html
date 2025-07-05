@@ -124,14 +124,13 @@
             async function getAIDescription(base64ImageData, mimeType) {
                 const apiKey = "";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-                // UPDATED: Route the API call through a CORS proxy to prevent browser security errors.
-                const proxyApiUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
+                // UPDATED: Switched to a different, more reliable CORS proxy.
+                const proxyApiUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
                 
                 const prompt = "Analyze this image from Philadelphia's Magic Gardens. Describe the key objects, materials, and themes visible. Be specific. Use terms from this list if they apply: mosaic, mirror, tile, bottle, bicycle wheel, folk art sculpture, human figure, face, text, grout.";
                 
                 const payload = { "contents": [{ "parts": [{ "text": prompt }, { "inline_data": { "mime_type": mimeType, "data": base64ImageData } }] }] };
                 
-                // UPDATED: Use the proxy URL for the fetch call.
                 const response = await fetch(proxyApiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 
                 if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
@@ -140,7 +139,6 @@
                 if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0].text) {
                     return result.candidates[0].content.parts[0].text;
                 }
-                // Handle cases where the API response might be valid but empty or malformed
                 if(result.candidates && result.candidates[0].finishReason === "SAFETY") {
                     return "Analysis blocked for safety reasons. The image may contain sensitive content.";
                 }
@@ -250,12 +248,7 @@
 
                     } catch (error) {
                         console.error(`Failed to process image ${file.name}:`, error);
-                        let errorMessage = `Failed to analyze image.`;
-                        if (error.message.includes('API Error')) {
-                            errorMessage += ` There might be a network issue or the API service is temporarily unavailable.`;
-                        } else {
-                            errorMessage += ` Please check your internet connection and try again. Details: ${error.message}`;
-                        }
+                        let errorMessage = `Failed to analyze image. Please check your internet connection and try again. Details: ${error.message}`;
                         row.cells[1].innerHTML = `<div class="text-sm text-red-600">${errorMessage}</div>`;
                         row.cells[2].innerHTML = `<div class="text-sm text-red-600">Error</div>`;
                         row.dataset.description = errorMessage;
