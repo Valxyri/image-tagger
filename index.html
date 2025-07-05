@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered PMG Image Tagger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">AI-Powered PMG Image Tagger</h1>
+            <p class="text-lg text-gray-600 mt-2">Automatically generate descriptions and keywords for your Magic Gardens photos.</p>
+        </header>
+
+        <!-- Step 1: Image Selection -->
+        <div id="selection-step" class="bg-white p-6 rounded-xl shadow-md mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Step 1: Select Image Folder</h2>
+            <p class="mb-4 text-gray-600">In a real application, you would connect to Google Drive here. For this demo, we'll use a pre-selected folder of sample PMG images.</p>
+            <div id="image-previews" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 mb-4">
+                <!-- Image previews will be populated by JavaScript -->
+            </div>
+            <button id="analyze-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center text-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/><path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M12 12v1.5"/><path d="M12 21v-1.5"/><path d="M21.31 12h-1.5"/><path d="M4.19 12H2.7"/><path d="m18.36 5.64-.9.9"/><path d="m6.54 17.46-.9.9"/></svg>
+                Analyze Images
+            </button>
+        </div>
+
+        <!-- Step 2: Results -->
+        <div id="results-step" class="hidden">
+             <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-semibold">Step 2: Review & Export</h2>
+                <div class="flex gap-4">
+                    <button id="export-csv-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export to CSV
+                    </button>
+                    <button id="start-over-btn" class="bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Start Over</button>
+                </div>
+            </div>
+            <p class="text-gray-600 mb-4">The AI has analyzed your images. Review the descriptions and keywords below. You can then export this data as a CSV file to import into Adobe Bridge or another asset manager.</p>
+            <div class="overflow-x-auto bg-white rounded-xl shadow-md">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image Filename</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI Description</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Suggested Keywords</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Results will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // --- DATA AND CONFIGURATION ---
+
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const startOverBtn = document.getElementById('start-over-btn');
+            const exportCsvBtn = document.getElementById('export-csv-btn');
+            const selectionStep = document.getElementById('selection-step');
+            const resultsStep = document.getElementById('results-step');
+            const resultsTableBody = document.getElementById('results-table-body');
+            const imagePreviewsContainer = document.getElementById('image-previews');
+
+            const sampleImages = [
+                { id: 'img1', filename: 'PMG_Courtyard_001.jpg', url: 'https://i.imgur.com/gA3d5S9.jpg' },
+                { id: 'img2', filename: 'PMG_WallDetail_002.jpg', url: 'https://i.imgur.com/uV8a2PE.jpg' },
+                { id: 'img3', filename: 'PMG_FolkArt_003.jpg', url: 'https://i.imgur.com/V3vA4sR.jpg' },
+                { id: 'img4', filename: 'PMG_Grotto_004.jpg', url: 'https://i.imgur.com/jYyKz8p.jpg' },
+                { id: 'img5', filename: 'PMG_BicycleWheel_005.jpg', url: 'https://i.imgur.com/qL5gL6b.jpg' },
+                { id: 'img6', filename: 'PMG_MirrorText_006.jpg', url: 'https://i.imgur.com/c2b0tYv.jpg' },
+                { id: 'img7', filename: 'PMG_Passageway_007.jpg', url: 'https://i.imgur.com/8xJ9T0f.jpg' },
+                { id: 'img8', filename: 'PMG_Sculpture_008.jpg', url: 'https://i.imgur.com/W2oZ8vR.jpg' },
+            ];
+
+            const vocabulary = {
+                "Artist & Method": ["Isaiah Zagar", "The Zagar Method", "Mosaic", "Trencadís", "Pique Assiette", "Assemblage", "Grouting", "Feathering", "Blobs", "Line Drawing", "Reverse Painted Glass", "Faux Stained Glass", "Site-specific installation", "Art Environment", "Immersive art", "Total Embellishment", "Sculptural Walls", "Julia Zagar", "Jeremiah Zagar", "Ezekiel Zagar"],
+                "Materials & Found Objects": ["Cement", "Grout", "Sand", "Adhesive", "Handmade tiles", "Doily tiles", "Painted tiles", "Ceramic tile", "Porcelain tile", "Stoneware tile", "Surbeck tiles", "Kohler tiles", "Talavera tiles", "Jorge Wilmot tiles", "Mirror", "Glass bottles", "Crushed glass", "Bicycle wheels", "Folk art", "Sculptures", "Plates", "Dishware", "Seashells", "Buttons", "Rebar"],
+                "Themes & Iconography": ["Self-portrait", "four-armed man", "Nudity", "Human Figure", "Fish", "Socks", "Hands", "Feet", "Eyes", "Lips", "Animals", "Faces", "Text", "Art is the Center of the Real World"],
+                "Art & Cultural Influences": ["Clarence Schmidt", "Simon Rodia", "Ferdinand Cheval", "Nek Chand", "Outsider Art", "Art Brut", "Surrealism", "Dadaism", "Marcel Duchamp", "Antoni Gaudí", "Pablo Picasso", "Mexico", "Peru", "India", "Bali"],
+                "Location & Site Details": ["Philadelphia's Magic Gardens", "Courtyard", "Sculpture Garden", "Grotto", "Pool", "Huppa", "Gallery", "Basement", "Alder Street Wall", "Watkins Street Studio", "Public Mural"],
+                "Preservation & Condition": ["Cracking", "Delamination", "Corrosion", "Rust", "Biological growth", "Water damage", "Fading", "Repair", "Restoration"]
+            };
+
+            // --- CORE FUNCTIONS ---
+
+            async function imageUrlToBase64(url) {
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error(`Failed to fetch image via proxy: ${response.statusText}`);
+                const blob = await response.blob();
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            async function getAIDescription(base64ImageData) {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                const prompt = "Analyze this image from Philadelphia's Magic Gardens. Describe the key objects, materials, and themes visible. Be specific. Use terms from this list if they apply: mosaic, mirror, tile, bottle, bicycle wheel, folk art sculpture, human figure, face, text, grout.";
+                const payload = { "contents": [{ "parts": [{ "text": prompt }, { "inline_data": { "mime_type": "image/jpeg", "data": base64ImageData } }] }] };
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                const result = await response.json();
+                if (result.candidates && result.candidates[0].content.parts[0].text) {
+                    return result.candidates[0].content.parts[0].text;
+                }
+                return "AI could not generate a description.";
+            }
+
+            function extractKeywords(description) {
+                const foundKeywords = new Set();
+                const text = description.toLowerCase();
+                for (const category in vocabulary) {
+                    for (const keyword of vocabulary[category]) {
+                        const regex = new RegExp(`\\b${keyword.toLowerCase().replace(/ /g, '\\s?')}\\b`, 'i');
+                        if (text.match(regex)) {
+                            foundKeywords.add(keyword);
+                        }
+                    }
+                }
+                return Array.from(foundKeywords);
+            }
+            
+            function exportToCsv() {
+                let csvContent = "data:text/csv;charset=utf-8,";
+                const headers = ["Source Filename", "Description", "Keywords"];
+                csvContent += headers.join(",") + "\r\n";
+
+                const rows = document.querySelectorAll("#results-table-body tr");
+                rows.forEach(row => {
+                    const filename = row.dataset.filename;
+                    const description = `"${row.dataset.description.replace(/"/g, '""')}"`; // Escape quotes
+                    const keywords = `"${row.dataset.keywords.replace(/"/g, '""')}"`; // Escape quotes
+                    csvContent += [filename, description, keywords].join(",") + "\r\n";
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "pmg_metadata_export.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            // --- UI AND EVENT HANDLING ---
+
+            function populatePreviews() {
+                imagePreviewsContainer.innerHTML = '';
+                sampleImages.forEach(img => {
+                    const imgElement = document.createElement('img');
+                    imgElement.src = img.url;
+                    imgElement.alt = "PMG Sample Image";
+                    imgElement.className = "w-full h-full object-cover rounded-lg shadow-sm";
+                    imagePreviewsContainer.appendChild(imgElement);
+                });
+            }
+            
+            analyzeBtn.addEventListener('click', async function() {
+                selectionStep.classList.add('hidden');
+                resultsStep.classList.remove('hidden');
+
+                for (const image of sampleImages) {
+                    const row = resultsTableBody.insertRow();
+                    row.dataset.filename = image.filename;
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${image.filename}</td>
+                        <td class="px-6 py-4 align-top"><div class="flex items-center"><div class="loader mr-2"></div><span>Analyzing...</span></div></td>
+                        <td class="px-6 py-4 align-top"><div class="flex items-center"><div class="loader mr-2"></div><span>Generating...</span></div></td>
+                    `;
+
+                    try {
+                        const base64 = await imageUrlToBase64(image.url);
+                        const description = await getAIDescription(base64);
+                        const keywords = extractKeywords(description);
+                        
+                        row.dataset.description = description;
+                        row.dataset.keywords = keywords.join(', ');
+
+                        row.cells[1].innerHTML = `<div class="text-sm text-gray-900">${description}</div>`;
+                        
+                        let keywordsHtml = '<div class="flex flex-wrap gap-2">';
+                        if (keywords.length > 0) {
+                            keywords.forEach(kw => {
+                                keywordsHtml += `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">${kw}</span>`;
+                            });
+                        } else {
+                            keywordsHtml += '<span class="text-sm text-gray-500">No keywords found.</span>';
+                        }
+                        keywordsHtml += '</div>';
+                        row.cells[2].innerHTML = keywordsHtml;
+
+                    } catch (error) {
+                        console.error(`Failed to process image ${image.id}:`, error);
+                        row.cells[1].innerHTML = `<div class="text-sm text-red-600">Failed to analyze image. ${error.message}</div>`;
+                        row.cells[2].innerHTML = `<div class="text-sm text-red-600">Error</div>`;
+                    }
+                }
+            });
+
+            startOverBtn.addEventListener('click', function() {
+                resultsStep.classList.add('hidden');
+                selectionStep.classList.remove('hidden');
+                resultsTableBody.innerHTML = '';
+            });
+            
+            exportCsvBtn.addEventListener('click', exportToCsv);
+
+            populatePreviews();
+        });
+    </script>
+</body>
+</html>
