@@ -124,7 +124,6 @@
             async function getAIDescription(base64ImageData, mimeType) {
                 const apiKey = "";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-                // UPDATED: Switched to a different, more reliable CORS proxy.
                 const proxyApiUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
                 
                 const prompt = "Analyze this image from Philadelphia's Magic Gardens. Describe the key objects, materials, and themes visible. Be specific. Use terms from this list if they apply: mosaic, mirror, tile, bottle, bicycle wheel, folk art sculpture, human figure, face, text, grout.";
@@ -134,7 +133,13 @@
                 const response = await fetch(proxyApiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 
                 if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-                const result = await response.json();
+                
+                // UPDATED: Correctly parse the wrapped JSON response from the proxy
+                const proxyResult = await response.json();
+                if (!proxyResult.contents) {
+                    throw new Error("Proxy response is missing 'contents' field.");
+                }
+                const result = JSON.parse(proxyResult.contents);
                 
                 if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0].text) {
                     return result.candidates[0].content.parts[0].text;
