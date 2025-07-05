@@ -38,7 +38,7 @@
         <!-- Step 1: Image Selection -->
         <div id="selection-step" class="bg-white p-6 rounded-xl shadow-md mb-8">
             <h2 class="text-2xl font-semibold mb-4">Step 1: Upload Your Images</h2>
-            <p class="mb-4 text-gray-600">Click the button below to select one or more image files from your computer.</p>
+            <p class="mb-4 text-gray-600">Click the button below to select one or more image files (JPEG, PNG, WEBP) from your computer. Files should be under 4MB each.</p>
             
             <input type="file" id="image-upload" multiple accept="image/jpeg, image/png, image/webp" class="hidden">
             <label for="image-upload" id="file-upload-label" class="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center text-lg mb-4">
@@ -96,6 +96,8 @@
             const resultsStep = document.getElementById('results-step');
             const resultsTableBody = document.getElementById('results-table-body');
             const imagePreviewsContainer = document.getElementById('image-previews');
+            const MAX_FILE_SIZE_MB = 4;
+            const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
             let userFiles = [];
 
@@ -119,11 +121,13 @@
                 });
             }
 
-            async function getAIDescription(base64ImageData) {
+            async function getAIDescription(base64ImageData, mimeType) {
                 const apiKey = "";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
                 const prompt = "Analyze this image from Philadelphia's Magic Gardens. Describe the key objects, materials, and themes visible. Be specific. Use terms from this list if they apply: mosaic, mirror, tile, bottle, bicycle wheel, folk art sculpture, human figure, face, text, grout.";
-                const payload = { "contents": [{ "parts": [{ "text": prompt }, { "inline_data": { "mime_type": "image/jpeg", "data": base64ImageData } }] }] };
+                
+                const payload = { "contents": [{ "parts": [{ "text": prompt }, { "inline_data": { "mime_type": mimeType, "data": base64ImageData } }] }] };
+                
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
                 const result = await response.json();
@@ -155,8 +159,8 @@
                 const rows = document.querySelectorAll("#results-table-body tr");
                 rows.forEach(row => {
                     const filename = row.dataset.filename;
-                    const description = `"${row.dataset.description.replace(/"/g, '""')}"`; // Escape quotes
-                    const keywords = `"${row.dataset.keywords.replace(/"/g, '""')}"`; // Escape quotes
+                    const description = `"${row.dataset.description.replace(/"/g, '""')}"`;
+                    const keywords = `"${row.dataset.keywords.replace(/"/g, '""')}"`;
                     csvContent += [filename, description, keywords].join(",") + "\r\n";
                 });
 
@@ -180,7 +184,7 @@
                         imgElement.src = URL.createObjectURL(file);
                         imgElement.alt = "User upload preview";
                         imgElement.className = "w-full h-full object-cover rounded-lg shadow-sm";
-                        imgElement.onload = () => URL.revokeObjectURL(imgElement.src); // Free memory
+                        imgElement.onload = () => URL.revokeObjectURL(imgElement.src);
                         imagePreviewsContainer.appendChild(imgElement);
                     });
                     analyzeBtn.disabled = false;
@@ -204,13 +208,23 @@
                         <td class="px-6 py-4 align-top"><div class="flex items-center"><div class="loader mr-2"></div><span>Generating...</span></div></td>
                     `;
 
+                    // NEW: Check file size before processing
+                    if (file.size > MAX_FILE_SIZE_BYTES) {
+                        const errorMsg = `File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Max size is ${MAX_FILE_SIZE_MB}MB.`;
+                        row.cells[1].innerHTML = `<div class="text-sm text-red-600">${errorMsg}</div>`;
+                        row.cells[2].innerHTML = `<div class="text-sm text-red-600">Skipped</div>`;
+                        row.dataset.description = errorMsg;
+                        row.dataset.keywords = "Skipped";
+                        continue; // Skip to the next file
+                    }
+
                     try {
                         const base64 = await fileToBase64(file);
-                        const description = await getAIDescription(base64);
+                        const description = await getAIDescription(base64, file.type);
                         const keywords = extractKeywords(description);
                         
                         row.dataset.description = description;
-                        row.dataset.keywords = keywords.join('; '); // Use semicolon for multi-keyword fields
+                        row.dataset.keywords = keywords.join('; ');
 
                         row.cells[1].innerHTML = `<div class="text-sm text-gray-900">${description}</div>`;
                         
@@ -227,8 +241,17 @@
 
                     } catch (error) {
                         console.error(`Failed to process image ${file.name}:`, error);
-                        row.cells[1].innerHTML = `<div class="text-sm text-red-600">Failed to analyze image. ${error.message}</div>`;
+                        // NEW: More detailed error message
+                        let errorMessage = `Failed to analyze image.`;
+                        if (error.message.includes('API Error')) {
+                            errorMessage += ` There might be a network issue or the API service is temporarily unavailable.`;
+                        } else {
+                            errorMessage += ` Please check your internet connection and try again. Details: ${error.message}`;
+                        }
+                        row.cells[1].innerHTML = `<div class="text-sm text-red-600">${errorMessage}</div>`;
                         row.cells[2].innerHTML = `<div class="text-sm text-red-600">Error</div>`;
+                        row.dataset.description = errorMessage;
+                        row.dataset.keywords = "Error";
                     }
                 }
             });
@@ -239,7 +262,7 @@
                 resultsTableBody.innerHTML = '';
                 imagePreviewsContainer.innerHTML = '';
                 userFiles = [];
-                imageUpload.value = ''; // Reset file input
+                imageUpload.value = '';
                 analyzeBtn.disabled = true;
             });
             
