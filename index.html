@@ -38,7 +38,7 @@
         <!-- Step 1: Image Selection -->
         <div id="selection-step" class="bg-white p-6 rounded-xl shadow-md mb-8">
             <h2 class="text-2xl font-semibold mb-4">Step 1: Upload Your Images</h2>
-            <p class="mb-4 text-gray-600">Click the button below to select one or more image files (JPEG, PNG, WEBP) from your computer. Files should be under 4MB each.</p>
+            <p class="mb-4 text-gray-600">Click the button below to select one or more image files (JPEG, PNG, WEBP) from your computer. Files should be under 5MB each.</p>
             
             <input type="file" id="image-upload" multiple accept="image/jpeg, image/png, image/webp" class="hidden">
             <label for="image-upload" id="file-upload-label" class="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center text-lg mb-4">
@@ -96,7 +96,7 @@
             const resultsStep = document.getElementById('results-step');
             const resultsTableBody = document.getElementById('results-table-body');
             const imagePreviewsContainer = document.getElementById('image-previews');
-            const MAX_FILE_SIZE_MB = 4;
+            const MAX_FILE_SIZE_MB = 5;
             const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
             let userFiles = [];
@@ -124,17 +124,27 @@
             async function getAIDescription(base64ImageData, mimeType) {
                 const apiKey = "";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                // UPDATED: Route the API call through a CORS proxy to prevent browser security errors.
+                const proxyApiUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
+                
                 const prompt = "Analyze this image from Philadelphia's Magic Gardens. Describe the key objects, materials, and themes visible. Be specific. Use terms from this list if they apply: mosaic, mirror, tile, bottle, bicycle wheel, folk art sculpture, human figure, face, text, grout.";
                 
                 const payload = { "contents": [{ "parts": [{ "text": prompt }, { "inline_data": { "mime_type": mimeType, "data": base64ImageData } }] }] };
                 
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                // UPDATED: Use the proxy URL for the fetch call.
+                const response = await fetch(proxyApiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                
                 if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
                 const result = await response.json();
-                if (result.candidates && result.candidates[0].content.parts[0].text) {
+                
+                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0].text) {
                     return result.candidates[0].content.parts[0].text;
                 }
-                return "AI could not generate a description.";
+                // Handle cases where the API response might be valid but empty or malformed
+                if(result.candidates && result.candidates[0].finishReason === "SAFETY") {
+                    return "Analysis blocked for safety reasons. The image may contain sensitive content.";
+                }
+                return "AI could not generate a description. The response was empty.";
             }
 
             function extractKeywords(description) {
@@ -208,14 +218,13 @@
                         <td class="px-6 py-4 align-top"><div class="flex items-center"><div class="loader mr-2"></div><span>Generating...</span></div></td>
                     `;
 
-                    // NEW: Check file size before processing
                     if (file.size > MAX_FILE_SIZE_BYTES) {
                         const errorMsg = `File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Max size is ${MAX_FILE_SIZE_MB}MB.`;
                         row.cells[1].innerHTML = `<div class="text-sm text-red-600">${errorMsg}</div>`;
                         row.cells[2].innerHTML = `<div class="text-sm text-red-600">Skipped</div>`;
                         row.dataset.description = errorMsg;
                         row.dataset.keywords = "Skipped";
-                        continue; // Skip to the next file
+                        continue;
                     }
 
                     try {
@@ -241,7 +250,6 @@
 
                     } catch (error) {
                         console.error(`Failed to process image ${file.name}:`, error);
-                        // NEW: More detailed error message
                         let errorMessage = `Failed to analyze image.`;
                         if (error.message.includes('API Error')) {
                             errorMessage += ` There might be a network issue or the API service is temporarily unavailable.`;
